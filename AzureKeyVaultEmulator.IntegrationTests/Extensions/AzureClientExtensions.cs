@@ -104,5 +104,4 @@ internal static class AzureClientExtensions
     //not using this because it seems overengineering, but open for any suggestion.
     // Insert other client extensions below and refactor
 
-
 }
