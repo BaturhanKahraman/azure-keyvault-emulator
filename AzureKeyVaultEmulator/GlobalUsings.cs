@@ -10,4 +10,3 @@ global using AzureKeyVaultEmulator.Shared.Models.Keys;
 global using AzureKeyVaultEmulator.Shared.Utilities;
 global using AzureKeyVaultEmulator.Shared.Utilities.Attributes;
 global using Microsoft.IdentityModel.Tokens;
-global using System;

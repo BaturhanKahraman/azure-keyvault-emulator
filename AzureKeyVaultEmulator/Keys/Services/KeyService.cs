@@ -18,10 +18,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-            var result = _keys.TryGetValue(name,out var keyBundle);
-            if(!result || keyBundle is null)
-                throw new KeyException($"Key with name {name} not found.");
-            return keyBundle;
+            return _keys.SafeGet(name);
         }
 
         public KeyBundle GetKey(string name, string version)
@@ -29,10 +26,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
             ArgumentException.ThrowIfNullOrWhiteSpace(version);
 
-            var result=_keys.TryGetValue(name.GetCacheId(version),out var keyBundle);
-            if(!result || keyBundle is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
-            return keyBundle;
+            return _keys.SafeGet(name.GetCacheId(version));
         }
 
         public KeyBundle CreateKey(string name, CreateKeyModel key)
@@ -72,22 +66,19 @@ namespace AzureKeyVaultEmulator.Keys.Services
 
             var cacheId = name.GetCacheId(version);
 
-            var result = _keys.TryGetValue(cacheId, out var keyBundle);
+            var key = _keys.SafeGet(cacheId);
 
-            if(!result || keyBundle is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
-
-            keyBundle.Attributes = attributes;
-            keyBundle.Attributes.RecoverableDays = attributes.RecoverableDays;
+            key.Attributes = attributes;
+            key.Attributes.RecoverableDays = attributes.RecoverableDays;
 
             foreach(var tag in tags)
-                keyBundle.Tags.TryAdd(tag.Key, tag.Value);
+                key.Tags.TryAdd(tag.Key, tag.Value);
 
-            keyBundle.Attributes.Update();
+            key.Attributes.Update();
 
-            _keys.TryUpdate(cacheId, keyBundle, keyBundle);
+            _keys.TryUpdate(cacheId, key, key);
 
-            return keyBundle.Attributes;
+            return key.Attributes;
         }
 
         public KeyBundle? RotateKey(string name, string version)
@@ -96,9 +87,8 @@ namespace AzureKeyVaultEmulator.Keys.Services
             ArgumentException.ThrowIfNullOrWhiteSpace(version);
 
             var cacheId = name.GetCacheId(version);
-            var getResult = _keys.TryGetValue(cacheId, out var key);
-            if(!getResult || key is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
+
+            var key = _keys.SafeGet(cacheId);
 
             var newKey = new KeyBundle
             {
@@ -117,9 +107,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
             ArgumentException.ThrowIfNullOrWhiteSpace(version);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(version), out var foundKey);
-            if(!getResult || foundKey is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
+            var foundKey = _keys.SafeGet(name.GetCacheId());
 
             var encrypted = EncodingUtils.Base64UrlEncode(foundKey.Key.Encrypt(keyOperationParameters));
 
@@ -135,9 +123,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
             ArgumentException.ThrowIfNullOrWhiteSpace(version);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(version), out var foundKey);
-            if (!getResult || foundKey is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
+            var foundKey = _keys.SafeGet(name.GetCacheId());
 
             var decrypted = foundKey.Key.Decrypt(keyOperationParameters);
 
@@ -152,9 +138,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(), out var foundKey);
-            if (!getResult || foundKey is null)
-                throw new KeyException($"Key with name {name} not found.");
+            var foundKey = _keys.SafeGet(name.GetCacheId());
 
             return new ValueModel<string>
             {
@@ -188,10 +172,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-            var getResult = _keyRotations.TryGetValue(name.GetCacheId(), out var keyRotationPolicy);
-            if (!getResult || keyRotationPolicy is null)
-                throw new KeyException($"Key rotation policy with name {name} not found.");
-            return keyRotationPolicy;
+            return _keyRotations.SafeGet(name.GetCacheId());
         }
 
         public KeyRotationPolicy UpdateKeyRotationPolicy(
@@ -201,9 +182,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(), out var key);
-            if (!getResult || key is null)
-                throw new KeyException($"Key with name {name} not found.");
+            var key = _keys.SafeGet(name.GetCacheId());
 
             // Policy exists against overall key, not the current (cached) version
             var policyExists = _keyRotations.TryGetValue(name, out var keyRotationPolicy);
@@ -271,9 +250,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
 
             var cacheId = name.GetCacheId(version);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(version), out var key);
-            if (!getResult || key is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
+            var key = _keys.SafeGet(cacheId);
 
             var aasJwt = tokenService.CreateTokenWithHeaderClaim([], "keys", JsonSerializer.Serialize(key));
 
@@ -318,9 +295,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
 
             var cacheId = name.GetCacheId(version);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(version), out var key);
-            if (!getResult || key is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
+            var key = _keys.SafeGet(cacheId);
 
             var signature = encryptionService.SignWithKey(digest);
 
@@ -340,9 +315,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
             // Key unused here because we are signing with global RSA.
             // Might be worth breaking this out in the future to allow for direct key signing
             // Would be better behaviour, but maybe too much for a mocking tool :)
-            var getResult = _keys.TryGetValue(name.GetCacheId(version), out var key);
-            if (!getResult || key is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
+            var key = _keys.SafeGet(name.GetCacheId(version));
 
             return new ValueModel<bool>
             {
@@ -357,9 +330,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
 
             var cacheId = name.GetCacheId(version);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(version), out var key);
-            if (!getResult || key is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
+            var key = _keys.SafeGet(cacheId);
 
             var encrypted = key.Key.Encrypt(para);
 
@@ -377,9 +348,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
 
             var cacheId = name.GetCacheId(version);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(version), out var key);
-            if (!getResult || key is null)
-                throw new KeyException($"Key with name {name} and version {version} not found.");
+            var key = _keys.SafeGet(cacheId);
 
             var decrypted = key.Key.Decrypt(para);
 
@@ -394,9 +363,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(), out var parentKey);
-            if (!getResult || parentKey is null)
-                throw new KeyException($"Key with name {name} not found.");
+            var parentKey = _keys.SafeGet(name.GetCacheId());
 
             var keys = _keys.Where(x => x.Key.Contains(name));
 
@@ -426,11 +393,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
-            var getResult = _keys.TryGetValue(name.GetCacheId(), out var key);
-            if (!getResult || key is null)
-                throw new KeyException($"Key with name {name} not found.");
-
-            return key;
+            return _deletedKeys.SafeGet(name);
         }
 
         public ListResult<KeyBundle> GetDeletedKeys(int maxResults = 25, int skipCount = 25)
@@ -459,9 +422,7 @@ namespace AzureKeyVaultEmulator.Keys.Services
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
             // to ensure it exists in our deleted keys first
-            var getResult = _deletedKeys.TryGetValue(name, out var key);
-            if (!getResult || key is null)
-                throw new KeyException($"Key with name {name} not found.");
+            _deletedKeys.SafeGet(name);
 
             _deletedKeys.Remove(name, out _);
         }
@@ -471,10 +432,6 @@ namespace AzureKeyVaultEmulator.Keys.Services
             ArgumentException.ThrowIfNullOrWhiteSpace(name);
 
             var toBeRestored = _deletedKeys.SafeGet(name);
-
-            var getResult = _keys.TryGetValue(name, out var keytoBeRestored);
-            if (!getResult || keytoBeRestored is null)
-                throw new KeyException($"Key with name {name} not found.");
 
             _deletedKeys.Remove(name, out _);
 
